@@ -1,15 +1,26 @@
 import pandas as pd
 import argparse
-import subprocess
+import datetime
+
+
 
 # Load CSV name from command line with argparse
 parser = argparse.ArgumentParser()
-parser.add_argument('-filename', '--filename')
+parser.add_argument('-f', '--filename')
 args = parser.parse_args()
 
 # Load CSV from Inca into a DataFrame 
 # Ensure 'date_last_evaluated' is parsed as datetime and reduce the risk of type inference errors
 df = pd.read_csv(args.filename, parse_dates=['date_last_evaluated'], low_memory=False) 
+
+
+
+# Generate a timestamp
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# Create a descriptive filename
+output_filename = f"haemonc_annotation_VCF{timestamp}.vcf"
+
 
 # Remove spaces and clean fields
 df['oncogenicity_classification'] = df['oncogenicity_classification'].str.replace(' ', '_')
@@ -32,9 +43,9 @@ other_df = df_sorted[~df_sorted['is_latest']].drop(columns='is_latest')
 
 
 # Aggregate other oncogenicity classifications with counts
-def format_oncogenicity_counts(x):
-    counts = x.value_counts()
-    formatted_counts = [f"{cls}({count})" for cls, count in counts.items()]
+def format_oncogenicity_counts(occurence):
+    counts = occurence.value_counts()
+    formatted_counts = [f"{classification}({count})" for classification, count in counts.items()]
     return "|".join(formatted_counts)
 
 
@@ -50,6 +61,14 @@ merged_df = pd.merge(
     on=['hgvsc'],
     how='left'
 )
+
+# Sort the merged DataFrame
+# Define chromosome order: numeric first, then X and Y
+chromosome_order = [str(i) for i in range(1, 23)] + ['X', 'Y']
+# Convert 'chromosome' column to categorical type with specified order
+merged_df['chromosome'] = pd.Categorical(merged_df['chromosome'], categories=chromosome_order, ordered=True)
+# Sort first by chromosome order, then by start position
+merged_df = merged_df.sort_values(by=['chromosome', 'start'])
 
 
 # Define contigs
@@ -80,7 +99,7 @@ contigs = """##contig=<ID=1,length=248956422,assembly=hg38>
 """
 
 # Write the VCF file
-with open('output.vcf', 'w') as vcf_file:
+with open(output_filename, 'w') as vcf_file:
     # Write VCF header
     vcf_file.write("##fileformat=VCFv4.2\n")
     vcf_file.write("##reference=GRCh38\n")
@@ -93,7 +112,7 @@ with open('output.vcf', 'w') as vcf_file:
     vcf_file.write("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n")
 
     # Write VCF data
-    for _, row in merged_df.iterrows():
+    for index_ignored, row in merged_df.iterrows():
         # Handle possible missing Other_Classifications
         other_oncogenicity = (
             row['Other_Classifications']
@@ -111,8 +130,5 @@ with open('output.vcf', 'w') as vcf_file:
             f"{row['reference_allele']}\t{row['alternate_allele']}\t.\t.\t{info_field}\n"
         )
 
-## Sort VCF
-with open("sorted.vcf", "w") as sorted_vcf:
-    subprocess.run(["vcf-sort", "output.vcf"], stdout=sorted_vcf, check=True)
-
-print("VCF file created as 'sorted.vcf'")
+# Output this message on terminal
+print(f"VCF file created as '{output_filename}'")
