@@ -19,7 +19,7 @@ df = pd.read_csv(args.filename, parse_dates=['date_last_evaluated'], low_memory=
 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # Create a descriptive filename
-output_filename = f"haemonc_annotation_VCF{timestamp}.vcf"
+output_filename = f"haemonc_annotation_VCF_{timestamp}.vcf"
 
 
 # Remove spaces and clean fields
@@ -43,8 +43,19 @@ other_df = df_sorted[~df_sorted['is_latest']].drop(columns='is_latest')
 
 
 # Aggregate other oncogenicity classifications with counts
-def format_oncogenicity_counts(occurence):
-    counts = occurence.value_counts()
+def format_oncogenicity_counts(classifications):
+    """
+    Format oncogenicity classifications with their counts.
+    This function takes a series of oncogenicity classifications,
+    counts the occurances of each classification formats them as:
+    classification(count)|other_classification(count)
+    Args:
+        classifications: Series of oncogenicity classifications.
+    Returns:
+        Formatted string of classification with counts, joined
+        by the '|' character
+    """
+    counts = classifications.value_counts()
     formatted_counts = [f"{classification}({count})" for classification, count in counts.items()]
     return "|".join(formatted_counts)
 
