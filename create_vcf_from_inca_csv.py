@@ -26,8 +26,25 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--filename', required=True, help="Input CSV file containing variant data")
 args = parser.parse_args()
 
-# Load CSV into a DataFrame
-df = pd.read_csv(args.filename, parse_dates=['date_last_evaluated'], low_memory=False)
+# Load CSV into a DataFrame with error handling
+try:
+    df = pd.read_csv(
+        args.filename,
+        parse_dates=['date_last_evaluated'],
+        low_memory=False
+    )
+    required_columns = [
+        'date_last_evaluated',
+        'oncogenicity_classification',
+        'chromosome',
+        'hgvsc'
+    ]
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+except Exception as e:
+    print(f"Error loading CSV file: {e}")
+    exit(1)
 
 # Clean and preprocess fields
 df['oncogenicity_classification'] = df['oncogenicity_classification'].str.replace(' ', '_')
